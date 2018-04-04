@@ -115,6 +115,7 @@ Optional<Sexp> parse(std::string cmd) {
 		s.elements = tokens;
 		return Just(s);
 	    }
+	    break;
 
 	case '"':
 	    if(last_char != '\\') {
@@ -134,15 +135,23 @@ Optional<Sexp> parse(std::string cmd) {
 		    in_str = true;
 		}
 	    }
+	    break;
 
 	case ' ':
-	    if(!in_str && token != "") {
-		Sexp s;
-		s.isAtom = true;
-		s.atom = token;
-		tokens.push_back(s);
-		token = "";
+	    if(!in_str) {
+		if(token != "") {
+		    Sexp s;
+		    s.isAtom = true;
+		    s.atom = token;
+		    tokens.push_back(s);
+		    token = "";
+		}
+	    } else {
+		token += c;
 	    }
+	    break;
+
+	case '\\':
 	    break;
 
 	default:
@@ -182,6 +191,14 @@ std::string add(std::list<std::string> nums) {
     return std::to_string(sum);
 }
 
+std::string concat(std::list<std::string> strs) {
+    std::string res = "";
+    for(std::string s: strs) {
+	res += s;
+    }
+    return res;
+}
+
 void test() {
     std::cout << "Sexp string parsing:" << std::endl;
     std::cout << sexp_str("(blah (blah) baz) djjgf fg) f") << std::endl;
@@ -208,6 +225,7 @@ void test() {
 
     std::cout << "Interp:" << std::endl;
     commands["add"] = add;
+    commands["concat"] = concat;
     Optional<std::string> ores = parse("(add 1 2)").map(interp);
     assert(!ores.isEmpty());
     assert(ores.get() == "3");
@@ -217,6 +235,15 @@ void test() {
     ores = parse("(add 1 2 3 4 -20)").map(interp);
     assert(!ores.isEmpty());
     assert(ores.get() == "-10");
+    ores = parse("(concat this -- a test)").map(interp);
+    assert(!ores.isEmpty());
+    assert(ores.get() == "this--atest");
+    ores = parse("(concat \"this\" \"test\")").map(interp);
+    assert(!ores.isEmpty());
+    assert(ores.get() == "thistest");
+    ores = parse("(concat \"this   is \" \"test\")").map(interp);
+    assert(!ores.isEmpty());
+    assert(ores.get() == "this   is test");
 }
 
 int main(int argc, char *argv[]) {
