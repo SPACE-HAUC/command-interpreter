@@ -17,6 +17,26 @@ struct Sexp {
 std::map<std::string,
 	 std::function<std::string(std::list<std::string>)>> commands;
 
+std::string add(std::list<std::string> nums) {
+    int sum = 0;
+    for(std::string num: nums) {
+	sum += std::stoi(num);
+    }
+    return std::to_string(sum);
+}
+
+std::string concat(std::list<std::string> strs) {
+    std::string res = "";
+    for(std::string s: strs) {
+	res += s;
+    }
+    return res;
+}
+
+std::string exit_repl(std::list<std::string> strs) {
+    exit(0);
+}
+
 std::ostream& operator<<(std::ostream& os, const Sexp &s) {
     if(s.isAtom) {
         return os << s.atom;
@@ -183,20 +203,16 @@ Optional<std::string> interp(Sexp s) {
     }
 }
 
-std::string add(std::list<std::string> nums) {
-    int sum = 0;
-    for(std::string num: nums) {
-	sum += std::stoi(num);
+void repl() {
+    commands["add"] = add;
+    commands["concat"] = concat;
+    commands["exit"] = exit_repl;
+    std::string cmd;
+    std::cout << "interp > ";
+    while(getline(std::cin, cmd)) {
+	std::cout << parse(cmd).map(interp) << std::endl;
+	std::cout << "interp > ";
     }
-    return std::to_string(sum);
-}
-
-std::string concat(std::list<std::string> strs) {
-    std::string res = "";
-    for(std::string s: strs) {
-	res += s;
-    }
-    return res;
 }
 
 void test() {
@@ -247,6 +263,7 @@ void test() {
 }
 
 int main(int argc, char *argv[]) {
-    test();
+    // test();
+    repl();
     return 0;
 }
