@@ -5,13 +5,23 @@
 #include <functional>
 #include <string>
 #include <cassert>
+#include <sstream>
 
 #include "../cdh_main/include/Optional.hpp"
+#include "cereal/archives/binary.hpp"
+#include "cereal/types/list.hpp"
+#include "cereal/types/string.hpp"
 
-struct Sexp {
+class Sexp {
+public:
     bool isAtom;
     std::string atom;
     std::list<Sexp> elements;
+
+    template<class Archive>
+    void serialize(Archive &archive) {
+	archive(isAtom, atom, elements);
+    }
 };
 
 std::map<std::string,
@@ -111,7 +121,7 @@ Optional<Sexp> parse(std::string cmd) {
 		started_cmd = true;
 	    } else {
 		Optional<std::string> sexp_as_str = sexp_str(cmd.substr(i));
-		Optional<Sexp> sexp = sexp_as_str.map(parse);
+		Optional<Sexp> sexp = sexp_as_str.flatMap(parse);
 		if(sexp.isEmpty()) {
 		    return None<Sexp>();
 		} else {
@@ -210,7 +220,7 @@ void repl() {
     std::string cmd;
     std::cout << "interp > ";
     while(getline(std::cin, cmd)) {
-	std::cout << parse(cmd).map(interp) << std::endl;
+	std::cout << parse(cmd).flatMap(interp) << std::endl;
 	std::cout << "interp > ";
     }
 }
@@ -242,28 +252,60 @@ void test() {
     std::cout << "Interp:" << std::endl;
     commands["add"] = add;
     commands["concat"] = concat;
-    Optional<std::string> ores = parse("(add 1 2)").map(interp);
+    Optional<std::string> ores = parse("(add 1 2)").flatMap(interp);
     assert(!ores.isEmpty());
     assert(ores.get() == "3");
-    ores = parse("(add 1 2 3 4)").map(interp);
+    ores = parse("(add 1 2 3 4)").flatMap(interp);
     assert(!ores.isEmpty());
     assert(ores.get() == "10");
-    ores = parse("(add 1 2 3 4 -20)").map(interp);
+    ores = parse("(add 1 2 3 4 -20)").flatMap(interp);
     assert(!ores.isEmpty());
     assert(ores.get() == "-10");
-    ores = parse("(concat this -- a test)").map(interp);
+    ores = parse("(concat this -- a test)").flatMap(interp);
     assert(!ores.isEmpty());
     assert(ores.get() == "this--atest");
-    ores = parse("(concat \"this\" \"test\")").map(interp);
+    ores = parse("(concat \"this\" \"test\")").flatMap(interp);
     assert(!ores.isEmpty());
     assert(ores.get() == "thistest");
-    ores = parse("(concat \"this   is \" \"test\")").map(interp);
+    ores = parse("(concat \"this   is \" \"test\")").flatMap(interp);
     assert(!ores.isEmpty());
     assert(ores.get() == "this   is test");
 }
 
+std::string serialize(Sexp s) {
+    std::stringstream ss;
+
+    {
+	cereal::BinaryOutputArchive oarchive(ss); // Create an output archive
+
+	oarchive(s); // Write the data to the archive
+    } // archive goes out of scope, ensuring all contents are flushed
+
+    return ss.str();
+}
+
+Sexp deserialize(std::string str) {
+    std::stringstream ss(str);
+    Sexp sexp;
+    {
+	cereal::BinaryInputArchive iarchive(ss);
+	iarchive(sexp);
+    }
+    return sexp;
+}
+
 int main(int argc, char *argv[]) {
     // test();
-    repl();
+    // repl();
+    auto serialized = parse("(hi joe schmoe)").map(serialize);
+    if (serialized.isEmpty()) {
+	std::cout << "Failed." << std::endl;
+    } else {
+	auto res = serialized.get();
+	std::cout << "Serialized: " << res << std::endl;
+	// try to deserialize
+	Sexp s = deserialize(res);
+	std::cout << "Deserialized: " << s << std::endl;
+    }
     return 0;
 }
