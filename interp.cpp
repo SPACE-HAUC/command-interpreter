@@ -7,7 +7,7 @@
 #include <cassert>
 #include <sstream>
 
-#include "../cdh_main/include/Optional.hpp"
+#include "Optional.hpp"
 #include "cereal/archives/binary.hpp"
 #include "cereal/types/list.hpp"
 #include "cereal/types/string.hpp"
