@@ -12,17 +12,7 @@
 #include "cereal/types/list.hpp"
 #include "cereal/types/string.hpp"
 
-class Sexp {
-public:
-    bool isAtom;
-    std::string atom;
-    std::list<Sexp> elements;
-
-    template<class Archive>
-    void serialize(Archive &archive) {
-	archive(isAtom, atom, elements);
-    }
-};
+#include "interp.hpp"
 
 std::map<std::string,
 	 std::function<std::string(std::list<std::string>)>> commands;
@@ -202,14 +192,21 @@ Optional<std::string> interp(Sexp s) {
 	for(Sexp s : elements) {
 	    Optional<std::string> element = interp(s);
 	    if(element.isEmpty()) {
-		std::cout << "Err: element fails interp" << std::endl;
+		std::cout << "Error: element fails interp: "
+			  << s << std::endl;
 		return None<std::string>();
 	    }
 	    element_strs.push_back(element.get());
 	}
 	std::string command = element_strs.front();
 	element_strs.pop_front();
-	return Just(commands[command](element_strs));
+	try {
+	    return Just(commands[command](element_strs));
+	} catch(const std::invalid_argument &e) {
+	    return Just("Error: invalid argument: " + std::string(e.what()));
+	} catch(const std::bad_function_call &e) {
+	    return Just("Error: Command '" + command + "' undefined.");
+	}
     }
 }
 
@@ -220,7 +217,8 @@ void repl() {
     std::string cmd;
     std::cout << "interp > ";
     while(getline(std::cin, cmd)) {
-	std::cout << parse(cmd).flatMap(interp) << std::endl;
+	std::cout << parse(cmd).flatMap(interp).getDefault("Invalid command.")
+		  << std::endl;
 	std::cout << "interp > ";
     }
 }
@@ -296,7 +294,7 @@ Sexp deserialize(std::string str) {
 
 int main(int argc, char *argv[]) {
     // test();
-    // repl();
+    std::cout << "Serialization demo:" << std::endl;
     auto serialized = parse("(hi joe schmoe)").map(serialize);
     if (serialized.isEmpty()) {
 	std::cout << "Failed." << std::endl;
@@ -307,5 +305,8 @@ int main(int argc, char *argv[]) {
 	Sexp s = deserialize(res);
 	std::cout << "Deserialized: " << s << std::endl;
     }
+
+    std::cout << "\n\n" << std::endl;
+    repl();
     return 0;
 }
