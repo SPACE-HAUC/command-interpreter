@@ -1,0 +1,108 @@
+#+TITLE: Interp: A Command Interpreter and (De)Serializer
+#+AUTHOR: Lukas Lazarek
+
+* Sending manual commands to the satellite
+This is an implementation of a simple command interpreter, along with a serializer/deserializer for commands to be sent to the satellite.
+
+* How it works
+- Commands are entered as [[https://en.wikipedia.org/wiki/S-expression][s-expression]] strings.
+- The string is parsed into an internal data structure (called =Sexp=) for representing s-expressions using =parse=.
+- The command represented by the s-expression can be executed using =interp_with=.
+- An s-expression can be serialized for transmission using =serialize=.
+- An s-expression can be deserialized after transmission using =deserialize=.
+
+* How to use it
+An example of using the interpreter is provided in the test code =interp-test.cpp=, specifically the =repl= function, which implements a simple Read-Eval-Print-Loop.
+
+The basic steps are:
+1. Obtain a string representing an s-expression command.
+2. Call =parse= to attempt to parse the string into an s-expression.
+3. If =parse= succeeds, call =interp_with= on the =Sexp= it returns, also providing a set of available commands.
+   1. Note that it is probably easier to use =make_interpreter= to make a simple function with type =Sexp -> String= so that you don't need to pass the command set every time. See the example referenced above.
+4. If =interp_with= (or the interpreter returned by =make_interpreter=) succeeds, the string it returns is the result.
+
+* Adding interpreter commands
+The interpreter has no built-in commands.
+
+You add commands to the interpreter by building a =CommandSet=, which is a map from command names to their implementations.
+This is the actual type of =CommandSet=:
+#+BEGIN_EXAMPLE
+typedef std::map<std::string, std::function<std::string(std::list<std::string>)>> CommandSet;
+#+END_EXAMPLE
+
+As you can see, the command name is just a simple string and will be what needs to be written in the command to invoke the action, which is a function taking a list of strings and returning a string.
+This might seem complex at first, but it's actually quite simple.
+It is probably best illustrated through example.
+
+Suppose we want to implement a command to add numbers.
+We want to be able to invoke it like this
+: (add 1 2 3)
+The command will add up all of the numbers given and return their sum.
+The first step to do this is to write the /implementation/ of the command, which as described above is just a function that takes a list of strings and returns a string.
+The code looks like this:
+#+BEGIN_SRC c++
+std::string add(std::list<std::string> nums) {
+    int sum = 0;
+    for(std::string num: nums) {
+        sum += std::stoi(num);
+    }
+    return std::to_string(sum);
+}
+#+END_SRC
+Notice how the command takes just a single list which contains all of the arguments given.
+This means our command can take any number of arguments; we can decide how to handle them or if we expect only a specific number of arguments.
+Notice also how the arguments are given as strings: this is because =interp= doesn't assume anything about how commands should interpret their arguments.
+So it is up to the command to convert the arguments to what it wants (in our case, integers) and do something with them (in our case, add them up).
+Finally we convert the result back to a string to return it.
+
+The way that we make this command available to the interpreter is by adding it to a =CommandSet= and passing that set to =interp_with=.
+Instead of passing the command set into interp along with our command every time, though, it's much easier to just use =make_interpreter= to make an interpreter with our command set baked in.
+For example:
+#+BEGIN_SRC c++
+CommandSet commands;
+commands["add"] = add;
+auto interp = make_interpreter(commands);
+#+END_SRC
+Now, we can use our interpreter =interp= to evaluate commands.
+To do that, we need to first parse the command strings using =parse= before we can use =interp=.
+Because =parse= and =interp= may both fail (they return =Option= types) we have to check if they failed and if not extract the result at each step.
+#+BEGIN_SRC c++
+std::string cmd, result;
+
+cmd = "(add 1 2 3)";
+Option<Sexp> parsed = parse(cmd);
+if (parsed.isEmpty()) {
+    std::cout << "Parse error!" << std::endl;
+} else {
+    Sexp s = parsed.get();
+    Option<std::string> result = interp(s);
+    if (result.isEmpty()) {
+	std::cout << "Invalid command." << std::endl;
+    } else {
+	std::string result_str = result.get();
+	std::cout << result_str << std::endl; // prints "6"
+    }
+}
+#+END_SRC
+A much cleaner way to deal with this is to use =Option= type's =map= and =flatMap= methods, which apply a function to an Optional value if it's not empty.
+Here's how it looks using those methods, along with a few more examples.
+#+BEGIN_SRC c++
+cmd = "(add 1 2 3)";
+result = parse(cmd).flatMap(interp).getDefault("Invalid command.");
+std::cout << result << std::endl; // prints "6"
+
+cmd = "(add 100 200 -5)";
+result = parse(cmd).flatMap(interp).getDefault("Invalid command.");
+std::cout << result << std::endl; // prints "295"
+
+cmd = "(add)";
+result = parse(cmd).flatMap(interp).getDefault("Invalid command.");
+std::cout << result << std::endl; // prints "0"
+#+END_SRC
+
+That's all there is to know how to use the interpeter. Check out the test code, specifically the =repl= function therein, for more reference on using =interp=.
+
+
+
+
+
