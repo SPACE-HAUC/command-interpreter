@@ -3,6 +3,7 @@
 
 #include <stdexcept>
 #include <iostream>
+#include <functional>
 
 /**
  * @brief A class for representing optional values. This is useful for
@@ -73,6 +74,7 @@ public:
     /**
      * @brief Apply the given function to this Option's value, if it
      * is present, to obtain a new optional value.
+     * This version of `map` works with plain function pointers.
      *
      * @param f The function to apply.
      * @return The new value.
@@ -88,8 +90,26 @@ public:
 
     /**
      * @brief Apply the given function to this Option's value, if it
+     * is present, to obtain a new optional value.
+     * This version of `map` works with function objects.
+     *
+     * @param f The function to apply.
+     * @return The new value.
+     */
+    template <typename B>
+    Optional<B> map(std::function<B(T)> f) {
+        if(empty) {
+            return Optional<B>::None();
+        } else {
+            return Optional<B>::Just(f(x));
+        }
+    }
+
+    /**
+     * @brief Apply the given function to this Option's value, if it
      * is present, to obtain a new optional value by flattening the
      * return of the function into a single optional value.
+     * This version of `flatMap` works with plain function pointers.
      *
      * @param f The function to apply.
      * @return The new value.
@@ -101,6 +121,38 @@ public:
         } else {
             return f(x);
         }
+    }
+
+    /**
+     * @brief Apply the given function to this Option's value, if it
+     * is present, to obtain a new optional value by flattening the
+     * return of the function into a single optional value.
+     * This version of `flatMap` works with function objects.
+     *
+     * @param f The function to apply.
+     * @return The new value.
+     */
+    template <typename B>
+    Optional<B> flatMap(std::function<Optional<B>(T)> f) {
+        if(empty) {
+            return Optional<B>::None();
+        } else {
+            return f(x);
+        }
+    }
+
+    /**
+     * @brief Compare this Option to another.
+     *
+     * @param other The other Option.
+     * @return Are they equal?
+     */
+    bool operator==(const Optional<T> &other) {
+	if (empty) {
+	    return other.isEmpty();
+	} else {
+	    return x == other.get();
+	}
     }
 
 private:
