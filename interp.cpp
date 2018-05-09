@@ -4,7 +4,6 @@
 #include <map>
 #include <functional>
 #include <string>
-#include <cassert>
 #include <sstream>
 
 #include "Optional.hpp"
@@ -13,29 +12,6 @@
 #include "cereal/types/string.hpp"
 
 #include "interp.hpp"
-
-std::map<std::string,
-	 std::function<std::string(std::list<std::string>)>> commands;
-
-std::string add(std::list<std::string> nums) {
-    int sum = 0;
-    for(std::string num: nums) {
-	sum += std::stoi(num);
-    }
-    return std::to_string(sum);
-}
-
-std::string concat(std::list<std::string> strs) {
-    std::string res = "";
-    for(std::string s: strs) {
-	res += s;
-    }
-    return res;
-}
-
-std::string exit_repl(std::list<std::string> strs) {
-    exit(0);
-}
 
 std::ostream& operator<<(std::ostream& os, const Sexp &s) {
     if(s.isAtom) {
@@ -50,6 +26,11 @@ std::ostream& operator<<(std::ostream& os, const Sexp &s) {
 }
 
 
+// Parse the given string for a substring representing an s-expression,
+// if possible.
+// The given string *must* begin with '('.
+//
+// Examples:
 // "(blah (blah) baz) shdfhj djf) fjdsj)" -> Just("(blah (blah) baz)")
 // "(blah (blah) baz" -> None
 // " (blah)" -> None
@@ -183,14 +164,14 @@ Optional<Sexp> parse(std::string cmd) {
     return None<Sexp>();
 }
 
-Optional<std::string> interp(Sexp s) {
+Optional<std::string> interp_with(Sexp s, CommandSet commands) {
     if(s.isAtom) {
 	return Just(s.atom);
     } else {
 	std::list<Sexp> elements = s.elements;
 	std::list<std::string> element_strs;
 	for(Sexp s : elements) {
-	    Optional<std::string> element = interp(s);
+	    Optional<std::string> element = interp_with(s, commands);
 	    if(element.isEmpty()) {
 		std::cout << "Error: element fails interp: "
 			  << s << std::endl;
@@ -210,64 +191,11 @@ Optional<std::string> interp(Sexp s) {
     }
 }
 
-void repl() {
-    commands["add"] = add;
-    commands["concat"] = concat;
-    commands["exit"] = exit_repl;
-    std::string cmd;
-    std::cout << "interp > ";
-    while(getline(std::cin, cmd)) {
-	std::cout << parse(cmd).flatMap(interp).getDefault("Invalid command.")
-		  << std::endl;
-	std::cout << "interp > ";
-    }
-}
-
-void test() {
-    std::cout << "Sexp string parsing:" << std::endl;
-    std::cout << sexp_str("(blah (blah) baz) djjgf fg) f") << std::endl;
-    std::cout << sexp_str("blah (blah) baz) djjgf fg) f") << std::endl;
-    std::cout << sexp_str("(blah (blah) baz)") << std::endl;
-    std::cout << sexp_str("(blah ((blah) baz))") << std::endl;
-    std::cout << sexp_str("(blah (\"(blah) bro\" baz))") << std::endl;
-    std::cout << sexp_str("(blah (\"(blah) bro))))\" baz))") << std::endl;
-    std::cout << sexp_str("(blah (\"(blah) \\\"bro)))\\\")\" baz))") << std::endl;
-    std::cout << sexp_str("(hi (joe schmoe) schmoe)") << std::endl;
-
-    std::cout << "Real parsing:" << std::endl;
-    std::cout << parse("(hi joe schmoe)") << std::endl;
-    Optional<Sexp> os = parse("(hi (joe schmoe) schmoe)");
-    assert(!os.isEmpty());
-    Sexp s = os.get();
-    assert(!s.isAtom);
-    assert(s.elements.size() == 3);
-    assert(s.elements.front().isAtom);
-    assert(s.elements.back().isAtom);
-    s.elements.pop_front();
-    assert(!s.elements.front().isAtom);
-    assert(s.elements.front().elements.size() == 2);
-
-    std::cout << "Interp:" << std::endl;
-    commands["add"] = add;
-    commands["concat"] = concat;
-    Optional<std::string> ores = parse("(add 1 2)").flatMap(interp);
-    assert(!ores.isEmpty());
-    assert(ores.get() == "3");
-    ores = parse("(add 1 2 3 4)").flatMap(interp);
-    assert(!ores.isEmpty());
-    assert(ores.get() == "10");
-    ores = parse("(add 1 2 3 4 -20)").flatMap(interp);
-    assert(!ores.isEmpty());
-    assert(ores.get() == "-10");
-    ores = parse("(concat this -- a test)").flatMap(interp);
-    assert(!ores.isEmpty());
-    assert(ores.get() == "this--atest");
-    ores = parse("(concat \"this\" \"test\")").flatMap(interp);
-    assert(!ores.isEmpty());
-    assert(ores.get() == "thistest");
-    ores = parse("(concat \"this   is \" \"test\")").flatMap(interp);
-    assert(!ores.isEmpty());
-    assert(ores.get() == "this   is test");
+std::function<Optional<std::string>(Sexp)>
+make_interpreter(CommandSet commands) {
+    return [commands](Sexp s) {
+	return interp_with(s, commands);
+    };
 }
 
 std::string serialize(Sexp s) {
@@ -290,23 +218,4 @@ Sexp deserialize(std::string str) {
 	iarchive(sexp);
     }
     return sexp;
-}
-
-int main(int argc, char *argv[]) {
-    // test();
-    std::cout << "Serialization demo:" << std::endl;
-    auto serialized = parse("(hi joe schmoe)").map(serialize);
-    if (serialized.isEmpty()) {
-	std::cout << "Failed." << std::endl;
-    } else {
-	auto res = serialized.get();
-	std::cout << "Serialized: " << res << std::endl;
-	// try to deserialize
-	Sexp s = deserialize(res);
-	std::cout << "Deserialized: " << s << std::endl;
-    }
-
-    std::cout << "\n\n" << std::endl;
-    repl();
-    return 0;
 }
