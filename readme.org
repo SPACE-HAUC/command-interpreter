@@ -1,17 +1,18 @@
+#+OPTIONS: toc:t
 #+TITLE: Interp: A Command Interpreter and (De)Serializer
 #+AUTHOR: Lukas Lazarek
 
-* Sending manual commands to the satellite
+* Sending Manual Commands to the Satellite
 This is an implementation of a simple command interpreter, along with a serializer/deserializer for commands to be sent to the satellite.
 
-* How it works
+* How It Works
 - Commands are entered as [[https://en.wikipedia.org/wiki/S-expression][s-expression]] strings.
 - The string is parsed into an internal data structure (called =Sexp=) for representing s-expressions using =parse=.
 - The command represented by the s-expression can be executed using =interp_with=.
 - An s-expression can be serialized for transmission using =serialize=.
 - An s-expression can be deserialized after transmission using =deserialize=.
 
-* How to use it
+* How to Use It
 An example of using the interpreter is provided in the test code =interp-test.cpp=, specifically the =repl= function, which implements a simple Read-Eval-Print-Loop.
 
 The basic steps are:
@@ -21,7 +22,7 @@ The basic steps are:
    1. Note that it is probably easier to use =make_interpreter= to make a simple function with type =Sexp -> String= so that you don't need to pass the command set every time. See the example referenced above.
 4. If =interp_with= (or the interpreter returned by =make_interpreter=) succeeds, the string it returns is the result.
 
-* Adding interpreter commands
+* Tutorial: Adding Interpreter Commands
 The interpreter has no built-in commands.
 
 You add commands to the interpreter by building a =CommandSet=, which is a map from command names to their implementations.
@@ -101,6 +102,12 @@ std::cout << result << std::endl; // prints "0"
 #+END_SRC
 
 That's all there is to know how to use the interpeter. Check out the test code, specifically the =repl= function therein, for more reference on using =interp=.
+
+* Serialization
+Included with =interp= are functions for serializing and deserializing parsed commands.
+The idea is that an application in ground station will run something similar to the =repl= function in the test code, parsing commands that the operator types in.
+Instead of interpreting the commands, however, the application will just =parse= them and then use =serialize= to convert the parsed command into a bit stream.
+That bit stream can be transmitted to the satellite, which can use =deserialize= to convert it back into an =Sexp= ready to be interpreted.
 
 
 
